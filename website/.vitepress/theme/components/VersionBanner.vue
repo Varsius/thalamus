@@ -2,29 +2,52 @@
   <div v-if="show" class="version-banner" role="note">
     <p>
       You are viewing the <strong>{{ banner.version }}</strong> documentation.
-      <a :href="banner.latestLink">
-        View the latest release ({{ banner.latestVersion }})
+      <a :href="latestLink">
+        View the latest release ({{ latest }})
       </a>
     </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useData } from 'vitepress'
 
 const { theme } = useData()
 
 const banner = computed(() => theme.value.versionBanner ?? {})
 
+interface VersionManifest {
+  latest?: string
+  versions?: string[]
+}
+
+const manifest = ref<VersionManifest | null>(null)
+
+onMounted(async () => {
+  const root = banner.value.root
+  if (!root) return
+  try {
+    const res = await fetch(`${root}versions.json`, { cache: 'no-store' })
+    if (res.ok) {
+      manifest.value = (await res.json()) as VersionManifest
+    }
+  } catch {
+    // Manifest unreachable (e.g. local dev): keep the banner hidden.
+  }
+})
+
+const latest = computed(() => manifest.value?.latest ?? '')
+
 const show = computed(
   () =>
     !!banner.value.version &&
-    !!banner.value.latestVersion &&
-    !!banner.value.latestLink &&
     banner.value.version !== 'main' &&
-    banner.value.version !== banner.value.latestVersion,
+    !!latest.value &&
+    latest.value !== banner.value.version,
 )
+
+const latestLink = computed(() => `${banner.value.root}${latest.value}/`)
 </script>
 
 <style scoped>

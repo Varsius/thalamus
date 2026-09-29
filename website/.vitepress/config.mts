@@ -18,26 +18,16 @@ const docsVersions = (process.env.DOCS_VERSIONS || '')
   .map((v) => v.trim())
   .filter(Boolean)
 
-// Latest released version (e.g. "v0.1.0"), or "main" when no release exists yet.
-const latestVersion = process.env.LATEST_VERSION || ''
-
 // Root of all versioned builds, e.g. "/thalamus/" for base "/thalamus/v0.1.0/".
 const baseRoot = base.endsWith(`${docsVersion}/`)
   ? base.slice(0, base.length - docsVersion.length - 1)
   : base
 const versionLink = (v: string) => `${baseRoot}${v}/`
 
-const isLatestRelease = latestVersion !== '' && docsVersion === latestVersion
-
 const versionNav = docsVersions.length
   ? [
       {
-        text:
-          docsVersion === 'main'
-            ? 'main (dev)'
-            : isLatestRelease
-              ? `${docsVersion} (latest)`
-              : docsVersion,
+        text: docsVersion === 'main' ? 'main (dev)' : docsVersion,
         items: [
           ...docsVersions.map((v) => ({
             text: v,
@@ -70,11 +60,12 @@ export default withMermaid({
     logo: '/logo.svg',
     siteTitle: 'Thalamus',
 
-    // Consumed by the VersionBanner theme component on non-latest releases.
+    // Consumed by the VersionBanner theme component. The banner fetches
+    // <root>/versions.json at runtime, so frozen releases always know the
+    // current latest version without being rebuilt.
     versionBanner: {
       version: docsVersion,
-      latestVersion: latestVersion,
-      latestLink: isLatestRelease ? '' : latestVersion ? versionLink(latestVersion) : '',
+      root: baseRoot,
     },
 
     nav: [
