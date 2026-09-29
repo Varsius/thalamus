@@ -1,76 +1,93 @@
 <template>
-  <div v-if="show" class="version-banner" role="note">
+  <div v-if="show" class="docs-version-banner" role="note">
     <p>
-      You are viewing the <strong>{{ banner.version }}</strong> documentation.
-      <a :href="latestLink">
-        View the latest release ({{ latest }})
-      </a>
+      <template v-if="isMain">
+        You are viewing the <strong>main (dev)</strong> documentation.
+      </template>
+      <template v-else>
+        You are viewing the <strong>{{ version }}</strong> documentation.
+      </template>
+      <a :href="latestLink">Latest release ({{ latest }})</a>
     </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useData } from 'vitepress'
+import { computed, onBeforeUnmount, watch } from 'vue'
+import { inBrowser, useData } from 'vitepress'
+import { useVersions } from '../composables/useVersions'
 
 const { theme } = useData()
 
-const banner = computed(() => theme.value.versionBanner ?? {})
+const config = computed(() => theme.value.versionBanner ?? {})
+const version = computed(() => config.value.version ?? '')
+const root = computed(() => config.value.root ?? '')
+const baseUrl = computed(() => config.value.baseUrl ?? '')
 
-interface VersionManifest {
-  latest?: string
-  versions?: string[]
-}
+const { latest } = useVersions(root.value)
 
-const manifest = ref<VersionManifest | null>(null)
-
-onMounted(async () => {
-  const root = banner.value.root
-  if (!root) return
-  try {
-    const res = await fetch(`${root}versions.json`, { cache: 'no-store' })
-    if (res.ok) {
-      manifest.value = (await res.json()) as VersionManifest
-    }
-  } catch {
-    // Manifest unreachable (e.g. local dev): keep the banner hidden.
-  }
-})
-
-const latest = computed(() => manifest.value?.latest ?? '')
+const isMain = computed(() => version.value === 'main')
 
 const show = computed(
-  () =>
-    !!banner.value.version &&
-    banner.value.version !== 'main' &&
-    !!latest.value &&
-    latest.value !== banner.value.version,
+  () => !!version.value && !!latest.value && latest.value !== version.value,
 )
 
-const latestLink = computed(() => `${banner.value.root}${latest.value}/`)
+const latestLink = computed(
+  () =>
+    baseUrl.value
+      ? `${baseUrl.value}${root.value}${latest.value}/`
+      : `${root.value}${latest.value}/`,
+)
+
+watch(
+  show,
+  (value) => {
+    if (!inBrowser) return
+    const height = value
+      ? getComputedStyle(document.documentElement).getPropertyValue('--vp-docs-banner-height') || '2.5rem'
+      : '0px'
+    document.documentElement.style.setProperty('--vp-layout-top-height', height)
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (inBrowser) {
+    document.documentElement.style.setProperty('--vp-layout-top-height', '0px')
+  }
+})
 </script>
 
 <style scoped>
-.version-banner {
-  border-bottom: 1px solid var(--vp-c-divider);
+.docs-version-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: calc(var(--vp-z-index-nav, 40) + 10);
+  height: var(--vp-docs-banner-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
   background-color: var(--vp-c-bg-soft);
-  padding: 8px 16px;
-  text-align: center;
+  border-bottom: 1px solid var(--vp-c-divider);
   font-size: 13px;
   line-height: 1.5;
   color: var(--vp-c-text-2);
+  text-align: center;
 }
 
-.version-banner p {
+.docs-version-banner p {
   margin: 0;
 }
 
-.version-banner a {
+.docs-version-banner a {
   color: var(--vp-c-brand-1);
   text-decoration: none;
 }
 
-.version-banner a:hover {
+.docs-version-banner a:hover {
   text-decoration: underline;
 }
 </style>

@@ -12,36 +12,11 @@ const base = docsVersion && pagesBase
       ? `/${pagesBase}/`
       : '/'
 
-// Released versions, newest first (e.g. "v0.2.0,v0.1.0"). Computed by CI from git tags.
-const docsVersions = (process.env.DOCS_VERSIONS || '')
-  .split(',')
-  .map((v) => v.trim())
-  .filter(Boolean)
-
 // Root of all versioned builds, e.g. "/thalamus/" for base "/thalamus/v0.1.0/".
 const baseRoot = base.endsWith(`${docsVersion}/`)
   ? base.slice(0, base.length - docsVersion.length - 1)
   : base
 const docsBaseUrl = process.env.DOCS_BASE_URL || ''
-const versionLink = (v: string) =>
-  docsBaseUrl ? `${docsBaseUrl}${baseRoot}${v}/` : `${baseRoot}${v}/`
-
-const versionNav = docsVersions.length
-  ? [
-      {
-        text: docsVersion === 'main' ? 'main (dev)' : docsVersion,
-        items: [
-          ...docsVersions.map((v) => ({
-            text: v,
-            link: versionLink(v),
-          })),
-          ...(docsVersion === 'main'
-            ? []
-            : [{ text: 'main (dev)', link: versionLink('main') }]),
-        ],
-      },
-    ]
-  : []
 
 const repoUrl =
   process.env.DOCUMENTATION_REPOSITORY_URL || 'https://github.com/cobaltcore-dev/thalamus'
@@ -62,12 +37,13 @@ export default withMermaid({
     logo: '/logo.svg',
     siteTitle: 'Thalamus',
 
-    // Consumed by the VersionBanner theme component. The banner fetches
-    // <root>/versions.json at runtime, so frozen releases always know the
-    // current latest version without being rebuilt.
+    // Consumed by the VersionBanner and VersionNav theme components. Both
+    // fetch <root>/versions.json at runtime, so frozen releases always know
+    // the current versions without being rebuilt.
     versionBanner: {
       version: docsVersion,
       root: baseRoot,
+      baseUrl: docsBaseUrl,
     },
 
     nav: [
@@ -76,7 +52,10 @@ export default withMermaid({
       { text: 'Concepts', link: '/concepts/architecture' },
       { text: 'Reference', link: '/reference/model-crd-api' },
       { text: 'Community', link: '/ipcei-cis-workshop-2026/' },
-      ...versionNav,
+      {
+        component: 'VersionNav',
+        props: { version: docsVersion, root: baseRoot, baseUrl: docsBaseUrl },
+      },
     ],
 
     sidebar: [

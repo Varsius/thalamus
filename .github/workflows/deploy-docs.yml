@@ -89,7 +89,6 @@ jobs:
         env:
           DOCS_VERSION: ${{ steps.set-version.outputs.version }}
           CHART_VERSION: ${{ steps.set-version.outputs.chart_version }}
-          DOCS_VERSIONS: ${{ steps.set-version.outputs.versions }}
           DOCS_BASE_URL: ${{ steps.set-version.outputs.docs_base_url }}
           DOCUMENTATION_REPOSITORY_URL: https://github.com/${{ github.repository }}
 
