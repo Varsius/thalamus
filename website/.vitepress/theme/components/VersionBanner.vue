@@ -7,7 +7,7 @@
       <template v-else>
         You are viewing the <strong>{{ version }}</strong> documentation.
       </template>
-      <a :href="latestLink">Latest release ({{ latest }})</a>
+      <a class="vp-raw" :href="latestLink">Latest release ({{ latest }})</a>
     </p>
   </div>
 </template>
