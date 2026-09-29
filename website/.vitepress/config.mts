@@ -22,7 +22,9 @@ const docsVersions = (process.env.DOCS_VERSIONS || '')
 const baseRoot = base.endsWith(`${docsVersion}/`)
   ? base.slice(0, base.length - docsVersion.length - 1)
   : base
-const versionLink = (v: string) => `${baseRoot}${v}/`
+const docsBaseUrl = process.env.DOCS_BASE_URL || ''
+const versionLink = (v: string) =>
+  docsBaseUrl ? `${docsBaseUrl}${baseRoot}${v}/` : `${baseRoot}${v}/`
 
 const versionNav = docsVersions.length
   ? [
