@@ -9,20 +9,10 @@
       @focus="open = true"
     >
       <span class="text">{{ label }}</span>
-      <svg class="icon" viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
-        <path
-          d="M4.427 6.427 8 10l3.573-3.573M8 0v16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
     </button>
     <ul class="menu" @mouseleave="open = false">
       <li v-for="item in items" :key="item.value" class="item">
-        <a :href="link(item.value)" :class="{ active: item.value === version }">
+        <a class="vp-raw" :href="link(item.value)">
           <span class="text">{{ item.text }}</span>
         </a>
       </li>
@@ -89,12 +79,6 @@ const link = (v: string) =>
   line-height: var(--vp-nav-height);
 }
 
-.icon {
-  margin-left: 4px;
-  fill: currentColor;
-  font-size: 14px;
-}
-
 .menu {
   position: absolute;
   top: calc(var(--vp-nav-height) / 2 + 20px);
@@ -132,10 +116,6 @@ const link = (v: string) =>
 }
 
 .item a:hover {
-  color: var(--vp-c-brand-1);
-}
-
-.item a.active {
   color: var(--vp-c-brand-1);
 }
 </style>
