@@ -70,10 +70,14 @@ jobs:
           [[ -n "$latest_release" ]] || latest_release="main"
           # All release tags, newest first, comma separated (e.g. "v0.2.0,v0.1.0").
           versions="$(git tag --list 'v*' --sort=-v:refname | paste -sd, -)"
+          # Absolute origin of the GitHub Pages site (owner must be lowercase).
+          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          docs_base_url="https://${owner_lc}.github.io"
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "chart_version=$chart_version" >> $GITHUB_OUTPUT
           echo "latest_release=$latest_release" >> $GITHUB_OUTPUT
           echo "versions=$versions" >> $GITHUB_OUTPUT
+          echo "docs_base_url=$docs_base_url" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         working-directory: website
@@ -86,6 +90,7 @@ jobs:
           DOCS_VERSION: ${{ steps.set-version.outputs.version }}
           CHART_VERSION: ${{ steps.set-version.outputs.chart_version }}
           DOCS_VERSIONS: ${{ steps.set-version.outputs.versions }}
+          DOCS_BASE_URL: ${{ steps.set-version.outputs.docs_base_url }}
           DOCUMENTATION_REPOSITORY_URL: https://github.com/${{ github.repository }}
 
       - name: Generate root redirect and version manifest
