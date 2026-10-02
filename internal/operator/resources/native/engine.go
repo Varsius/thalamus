@@ -4,6 +4,8 @@
 package native
 
 import (
+	"slices"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,22 +17,34 @@ import (
 // engineHTTPPort is the TCP port the vLLM engine listens on.
 const engineHTTPPort = 8000
 
+// nobody is the distroless "nobody" uid/gid.
+const nobody int64 = 65532
+
 // BuildEngineDeployment returns the desired Deployment for the vLLM inference engine.
 func BuildEngineDeployment(model *v1alpha1.Model) *appsv1.Deployment {
 	engine := model.Spec.Serving.Engine
 
 	command := []string{"vllm", "serve"}
 	args := []string{}
-	env := engine.Env
+	env := slices.Clone(engine.Env)
 
 	if model.Spec.Weights.Type == v1alpha1.WeightsTypeHF && model.Spec.Weights.HF != nil {
 		hf := model.Spec.Weights.HF
 		args = append(args, hf.RepoID, "--served-model-name="+hf.RepoID)
-		env = append([]corev1.EnvVar{{
+		env = append(env, corev1.EnvVar{
 			Name:      "HF_TOKEN",
 			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &hf.TokenSecret},
-		}}, env...)
+		})
 	}
+
+	// Root filesystem read-only; process runs as uid nobody
+	// Point caches at /cache instead of images $HOME (/root)
+	// Appended last so user env can't override the redirection
+	env = append(env,
+		corev1.EnvVar{Name: "HOME", Value: "/cache"},
+		corev1.EnvVar{Name: "HF_HOME", Value: "/cache/huggingface"},
+		corev1.EnvVar{Name: "XDG_CACHE_HOME", Value: "/cache"},
+	)
 
 	args = append(args, engine.Args...)
 
@@ -38,15 +52,30 @@ func BuildEngineDeployment(model *v1alpha1.Model) *appsv1.Deployment {
 		Name:            "engine",
 		Image:           engine.Image,
 		ImagePullPolicy: corev1.PullIfNotPresent,
-		Command:         command,
-		Args:            args,
-		Env:             env,
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: new(false),
+			ReadOnlyRootFilesystem:   new(true),
+			RunAsNonRoot:             new(true),
+			RunAsUser:                new(nobody),
+			RunAsGroup:               new(nobody),
+			Privileged:               new(false),
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: corev1.SeccompProfileTypeRuntimeDefault,
+			},
+		},
+		Command: command,
+		Args:    args,
+		Env:     env,
 		Ports: []corev1.ContainerPort{
 			{Name: "http", ContainerPort: engineHTTPPort, Protocol: corev1.ProtocolTCP},
 		},
 		VolumeMounts: []corev1.VolumeMount{
-			{Name: "vllm-cache", MountPath: "/root/.cache"},
+			{Name: "cache", MountPath: "/cache"},
 			{Name: "dshm", MountPath: "/dev/shm"},
+			{Name: "tmp", MountPath: "/tmp"},
 		},
 		StartupProbe: &corev1.Probe{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -88,15 +117,30 @@ func BuildEngineDeployment(model *v1alpha1.Model) *appsv1.Deployment {
 	}
 
 	podSpec := corev1.PodSpec{
+		SecurityContext: &corev1.PodSecurityContext{
+			RunAsNonRoot: new(true),
+			RunAsUser:    new(nobody),
+			RunAsGroup:   new(nobody),
+			// Chowns cache volume to group nobody; pre-populated PVC
+			// stays writable regardless of seeding uid
+			FSGroup: new(nobody),
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: corev1.SeccompProfileTypeRuntimeDefault,
+			},
+		},
 		Containers: []corev1.Container{container},
 		Volumes: []corev1.Volume{
 			{
-				Name:         "vllm-cache",
+				Name:         "cache",
 				VolumeSource: cacheVolumeSource,
 			},
 			{
 				Name:     "dshm",
 				EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory},
+			},
+			{
+				Name:     "tmp",
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
 	}

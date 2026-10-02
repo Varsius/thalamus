@@ -48,14 +48,24 @@ func TestBuildEngineDeployment(t *testing.T) {
 		t.Errorf("Args:\ngot:  %v\nwant: %v", c.Args, expectedArgs)
 	}
 
-	if c.Env[0].Name != "HF_TOKEN" {
-		t.Errorf("first env:\ngot:  %q\nwant: HF_TOKEN", c.Env[0].Name)
+	if c.Env[0].Name != "EXTRA" {
+		t.Errorf("env[0]:\ngot:  %q\nwant: EXTRA", c.Env[0].Name)
 	}
-	if c.Env[0].ValueFrom.SecretKeyRef.Name != "hf-token" {
-		t.Errorf("HF_TOKEN secret:\ngot:  %q\nwant: hf-token", c.Env[0].ValueFrom.SecretKeyRef.Name)
+	if c.Env[1].Name != "HF_TOKEN" {
+		t.Errorf("env[1]:\ngot:  %q\nwant: HF_TOKEN", c.Env[1].Name)
 	}
-	if c.Env[1].Name != "EXTRA" {
-		t.Errorf("second env:\ngot:  %q\nwant: EXTRA", c.Env[1].Name)
+	if c.Env[1].ValueFrom.SecretKeyRef.Name != "hf-token" {
+		t.Errorf("HF_TOKEN secret:\ngot:  %q\nwant: hf-token", c.Env[1].ValueFrom.SecretKeyRef.Name)
+	}
+	wantCacheEnv := map[string]string{
+		"HOME":           "/cache",
+		"HF_HOME":        "/cache/huggingface",
+		"XDG_CACHE_HOME": "/cache",
+	}
+	for i, w := range []string{"HOME", "HF_HOME", "XDG_CACHE_HOME"} {
+		if c.Env[i+2].Name != w || c.Env[i+2].Value != wantCacheEnv[w] {
+			t.Errorf("env[%d]:\ngot:  %+v\nwant: %s=%s", i+2, c.Env[i+2], w, wantCacheEnv[w])
+		}
 	}
 	if c.Resources.Requests == nil {
 		t.Error("Resources.Requests is nil")
@@ -67,13 +77,102 @@ func TestBuildEngineDeployment(t *testing.T) {
 		t.Error("missing probes")
 	}
 	volNames := map[string]bool{}
+	mountPaths := map[string]string{}
 	for _, v := range dep.Spec.Template.Spec.Volumes {
 		volNames[v.Name] = true
 	}
-	for _, want := range []string{"vllm-cache", "dshm"} {
+	for _, m := range c.VolumeMounts {
+		mountPaths[m.Name] = m.MountPath
+	}
+	for _, want := range []string{"cache", "dshm", "tmp"} {
 		if !volNames[want] {
 			t.Errorf("missing volume %q", want)
 		}
+	}
+	wantMounts := map[string]string{
+		"cache": "/cache",
+		"dshm":  "/dev/shm",
+		"tmp":   "/tmp",
+	}
+	for name, path := range wantMounts {
+		if mountPaths[name] != path {
+			t.Errorf("mount %q:\ngot:  %q\nwant: %q", name, mountPaths[name], path)
+		}
+	}
+}
+
+func TestBuildEngineDeployment_CacheEnvOverridesUserEnv(t *testing.T) {
+	model := testutil.NewModel("tiny-llm", "default")
+	model.Spec.Serving.Engine.Env = append(model.Spec.Serving.Engine.Env,
+		corev1.EnvVar{Name: "HOME", Value: "/root"},
+		corev1.EnvVar{Name: "XDG_CACHE_HOME", Value: "/root/.cache"},
+	)
+	dep := BuildEngineDeployment(model)
+	c := dep.Spec.Template.Spec.Containers[0]
+
+	got := map[string]string{}
+	for _, e := range c.Env {
+		got[e.Name] = e.Value
+	}
+	if got["HOME"] != "/cache" {
+		t.Errorf("HOME:\ngot:  %q\nwant: /cache", got["HOME"])
+	}
+	if got["XDG_CACHE_HOME"] != "/cache" {
+		t.Errorf("XDG_CACHE_HOME:\ngot:  %q\nwant: /cache", got["XDG_CACHE_HOME"])
+	}
+}
+
+func TestBuildEngineDeploymentSecurity(t *testing.T) {
+	dep := BuildEngineDeployment(testutil.NewModel("tiny-llm", "default"))
+
+	podSC := dep.Spec.Template.Spec.SecurityContext
+	if podSC == nil {
+		t.Fatal("missing pod securityContext")
+	}
+	if podSC.RunAsNonRoot == nil || !*podSC.RunAsNonRoot {
+		t.Error("pod runAsNonRoot must be true")
+	}
+	if podSC.RunAsUser == nil || *podSC.RunAsUser != 65532 {
+		t.Errorf("pod runAsUser:\ngot:  %+v\nwant: 65532", podSC.RunAsUser)
+	}
+	if podSC.RunAsGroup == nil || *podSC.RunAsGroup != 65532 {
+		t.Errorf("pod runAsGroup:\ngot:  %+v\nwant: 65532", podSC.RunAsGroup)
+	}
+	if podSC.FSGroup == nil || *podSC.FSGroup != 65532 {
+		t.Errorf("pod fsGroup:\ngot:  %+v\nwant: 65532", podSC.FSGroup)
+	}
+	if podSC.SeccompProfile == nil || podSC.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Errorf("pod seccompProfile.type:\ngot:  %+v\nwant: RuntimeDefault", podSC.SeccompProfile)
+	}
+
+	c := dep.Spec.Template.Spec.Containers[0]
+	sc := c.SecurityContext
+	if sc == nil {
+		t.Fatal("missing container securityContext")
+	}
+	if sc.AllowPrivilegeEscalation == nil || *sc.AllowPrivilegeEscalation {
+		t.Error("container allowPrivilegeEscalation must be false")
+	}
+	if sc.ReadOnlyRootFilesystem == nil || !*sc.ReadOnlyRootFilesystem {
+		t.Error("container readOnlyRootFilesystem must be true")
+	}
+	if sc.RunAsNonRoot == nil || !*sc.RunAsNonRoot {
+		t.Error("container runAsNonRoot must be true")
+	}
+	if sc.RunAsUser == nil || *sc.RunAsUser != 65532 {
+		t.Errorf("container runAsUser:\ngot:  %+v\nwant: 65532", sc.RunAsUser)
+	}
+	if sc.RunAsGroup == nil || *sc.RunAsGroup != 65532 {
+		t.Errorf("container runAsGroup:\ngot:  %+v\nwant: 65532", sc.RunAsGroup)
+	}
+	if sc.Privileged != nil && *sc.Privileged {
+		t.Error("container privileged must be false")
+	}
+	if sc.Capabilities == nil || len(sc.Capabilities.Drop) != 1 || sc.Capabilities.Drop[0] != "ALL" {
+		t.Errorf("container capabilities.drop:\ngot:  %+v\nwant: [ALL]", sc.Capabilities)
+	}
+	if sc.SeccompProfile == nil || sc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Errorf("container seccompProfile.type:\ngot:  %+v\nwant: RuntimeDefault", sc.SeccompProfile)
 	}
 }
 
@@ -116,14 +215,14 @@ func TestBuildEngineDeployment_NoScheduling(t *testing.T) {
 func TestBuildEngineDeployment_CacheDefaultsToEmptyDir(t *testing.T) {
 	dep := BuildEngineDeployment(testutil.NewModel("tiny-llm", "default"))
 	for _, v := range dep.Spec.Template.Spec.Volumes {
-		if v.Name == "vllm-cache" {
+		if v.Name == "cache" {
 			if v.EmptyDir == nil {
 				t.Error("expected emptyDir when cache not set")
 			}
 			return
 		}
 	}
-	t.Error("vllm-cache volume not found")
+	t.Error("cache volume not found")
 }
 
 func TestBuildEngineDeployment_CachePVC(t *testing.T) {
@@ -133,14 +232,14 @@ func TestBuildEngineDeployment_CachePVC(t *testing.T) {
 	}
 	dep := BuildEngineDeployment(model)
 	for _, v := range dep.Spec.Template.Spec.Volumes {
-		if v.Name == "vllm-cache" {
+		if v.Name == "cache" {
 			if v.PersistentVolumeClaim == nil || v.PersistentVolumeClaim.ClaimName != "my-model-cache" {
 				t.Errorf("unexpected cache volume source: %+v", v.VolumeSource)
 			}
 			return
 		}
 	}
-	t.Error("vllm-cache volume not found")
+	t.Error("cache volume not found")
 }
 
 func TestBuildEngineService(t *testing.T) {
