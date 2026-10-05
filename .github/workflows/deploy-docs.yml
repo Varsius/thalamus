@@ -100,26 +100,23 @@ jobs:
           out="${RUNNER_TEMP}/root-redirect"
           mkdir -p "$out"
           touch "$out/.nojekyll"
-          cat > "$out/index.html" <<EOF
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <meta http-equiv="refresh" content="0; url=${url}">
-              <link rel="canonical" href="${{ steps.set-version.outputs.docs_base_url }}${url}">
-              <title>Thalamus Documentation</title>
-            </head>
-            <body>
-              <p>Redirecting to the latest documentation at <a href="${url}">${url}</a>…</p>
-            </body>
-          </html>
-          EOF
-          json=""
-          IFS=',' read -ra vlist <<< "$versions"
-          for v in "${vlist[@]}"; do
-            [[ -n "$v" ]] && json+="${json:+,}\"${v}\""
-          done
-          printf '{"latest": "%s", "versions": [%s]}\n' "$target" "$json" > "$out/versions.json"
+          cat > "$out/index.html" <<-EOF
+          	<!DOCTYPE html>
+          	<html>
+          	  <head>
+          	    <meta charset="utf-8">
+          	    <meta http-equiv="refresh" content="0; url=${url}">
+          	    <link rel="canonical" href="${{ steps.set-version.outputs.docs_base_url }}${url}">
+          	    <title>Thalamus Documentation</title>
+          	  </head>
+          	  <body>
+          	    <p>Redirecting to the latest documentation at <a href="${url}">${url}</a>…</p>
+          	  </body>
+          	</html>
+          	EOF
+          jq -n --arg latest "$target" --arg csv "$versions" \
+            '{ latest: $latest, versions: ($csv | split(",") | map(select(. != ""))) }' \
+            > "$out/versions.json"
           echo "path=$out" >> $GITHUB_OUTPUT
 
       - name: Deploy versioned docs
