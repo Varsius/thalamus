@@ -22,9 +22,6 @@ concurrency:
   group: pages-${{ github.ref_name }}
   cancel-in-progress: false
 
-env:
-  PAGES_BASE: thalamus
-
 jobs:
   build:
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
@@ -89,6 +86,7 @@ jobs:
         env:
           DOCS_VERSION: ${{ steps.set-version.outputs.version }}
           CHART_VERSION: ${{ steps.set-version.outputs.chart_version }}
+          PAGES_BASE: ${{ github.event.repository.name }}
           DOCS_BASE_URL: ${{ steps.set-version.outputs.docs_base_url }}
           DOCUMENTATION_REPOSITORY_URL: https://github.com/${{ github.repository }}
 
@@ -98,7 +96,7 @@ jobs:
         run: |
           target="${{ steps.set-version.outputs.latest_release }}"
           versions="${{ steps.set-version.outputs.versions }}"
-          url="/${{ env.PAGES_BASE }}/${target}/"
+          url="/${{ github.event.repository.name }}/${target}/"
           out="${RUNNER_TEMP}/root-redirect"
           mkdir -p "$out"
           touch "$out/.nojekyll"
