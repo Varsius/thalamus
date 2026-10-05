@@ -121,10 +121,14 @@ export default withMermaid({
       provider: 'local',
     },
 
-    editLink: {
-      pattern: `${repoUrl}/edit/${docsVersion}/website/:path`,
-      text: 'Edit this page on GitHub',
-    },
+    ...(docsVersion === 'main'
+      ? {
+          editLink: {
+            pattern: `${repoUrl}/edit/main/website/:path`,
+            text: 'Edit this page on GitHub',
+          },
+        }
+      : {}),
 
     outline: [2, 3, 4, 5],
   },
