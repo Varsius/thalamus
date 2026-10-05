@@ -63,7 +63,7 @@ jobs:
             chart_version=""
           fi
           # Latest released tag, or "main" when no release exists yet.
-          latest_release="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          latest_release="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
           [[ -n "$latest_release" ]] || latest_release="main"
           # All release tags, newest first, comma separated (e.g. "v0.2.0,v0.1.0").
           versions="$(git tag --list 'v*' --sort=-v:refname | paste -sd, -)"
