@@ -106,7 +106,7 @@ jobs:
             <head>
               <meta charset="utf-8">
               <meta http-equiv="refresh" content="0; url=${url}">
-              <link rel="canonical" href="https://${{ github.repository_owner }}.github.io${url}">
+              <link rel="canonical" href="${{ steps.set-version.outputs.docs_base_url }}${url}">
               <title>Thalamus Documentation</title>
             </head>
             <body>
