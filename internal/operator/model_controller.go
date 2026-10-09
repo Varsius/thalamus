@@ -12,6 +12,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -121,6 +122,7 @@ func (r *ModelReconciler) deleteOwned(ctx context.Context, owner *v1alpha1.Model
 // syncStatus updates common status fields and dispatches to the backend-specific status sync.
 func (r *ModelReconciler) syncStatus(ctx context.Context, model *v1alpha1.Model) error {
 	patch := client.MergeFrom(model.DeepCopy())
+	before := model.Status.DeepCopy()
 
 	model.Status.EngineType = model.DetectedEngineType()
 	model.Status.EPPType = model.DetectedEPPType()
@@ -140,6 +142,9 @@ func (r *ModelReconciler) syncStatus(ctx context.Context, model *v1alpha1.Model)
 		return err
 	}
 
+	if apiequality.Semantic.DeepEqual(before, &model.Status) {
+		return nil
+	}
 	return r.Status().Patch(ctx, model, patch)
 }
 
