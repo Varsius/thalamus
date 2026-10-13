@@ -110,7 +110,7 @@ Cons:
 
 ### dry-run round-trip (untested)
 
-Webhook POSTs a scratch pod w.ith `dryRun=All` and converts the 422 into a denial
+Webhook POSTs a scratch pod with `dryRun=All` and converts the 422 into a denial
 
 Pros:
 
