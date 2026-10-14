@@ -1,6 +1,6 @@
 # Thalamus Model Serving Spec
 
-> Status: no decision yet.
+> Status: PodSpec, no mutating or validating webhook (Option 1). Defaults (container name/image/pull policy) are resolved by the operator at reconcile. Semantic pod errors surface in `status.conditions` at engine instantiation.
 
 ## Goals
 
